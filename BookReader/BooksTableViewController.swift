@@ -8,13 +8,21 @@
 
 import UIKit
 import CoreData
+import Alamofire
+import Kingfisher
+import SwiftSoup
+
 class BooksTableViewController: UITableViewController,UISearchBarDelegate,UISearchControllerDelegate {
     var books = [Book]()
     let sc = UISearchController(searchResultsController: nil)
     let appDelegate = UIApplication.shared.delegate as! AppDelegate
+    var BookCellContentCache = [Int:BookCellContent]()
+    var isSearching = false
+    let mainPageGetter = GetMainPage()
+    
     func addOne() {
         let nb = Book(context: appDelegate.persistentContainer.viewContext)
-        nb.path = "http://path"
+        nb.path = "https://m.biqudu.com/16_16431/"
         (UIApplication.shared.delegate as! AppDelegate).saveContext()
     }
     func loadAll(){
@@ -28,11 +36,8 @@ class BooksTableViewController: UITableViewController,UISearchBarDelegate,UISear
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Uncomment the following line to preserve selection between presentations
-        // self.clearsSelectionOnViewWillAppear = false
-
-        // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-        // self.navigationItem.rightBarButtonItem = self.editButtonItem
+        mainPageGetter.updateMainPageDelegate = self
+        self.navigationItem.rightBarButtonItem = self.editButtonItem
         navigationController?.navigationBar.barStyle = .blackTranslucent
         navigationController?.navigationBar.barTintColor = #colorLiteral(red: 0.2392156869, green: 0.6745098233, blue: 0.9686274529, alpha: 1)
         navigationController?.navigationBar.tintColor = .white
@@ -46,9 +51,9 @@ class BooksTableViewController: UITableViewController,UISearchBarDelegate,UISear
         sc.searchBar.delegate = self
         sc.searchBar.setValue("取消", forKey: "_cancelButtonText")
         sc.delegate = self
+        loadAll()
     }
     @IBAction func refreshBooks(_ sender: UIRefreshControl) {
-        addOne()
         loadAll()
         refreshControl?.endRefreshing()
     }
@@ -86,9 +91,27 @@ class BooksTableViewController: UITableViewController,UISearchBarDelegate,UISear
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "book_cell", for: indexPath)
-      
-
+        let cell = tableView.dequeueReusableCell(withIdentifier: "book_cell", for: indexPath) as! BookTableViewCell
+        cell.bookName.text = "";
+        cell.updateTime.text = "";
+        cell.latestedChapter.setTitle("", for: .normal)
+        cell.latestedChapter.isUserInteractionEnabled = false
+        cell.origin.text = ""
+        cell.isUserInteractionEnabled = false
+        let index = indexPath.row
+        //chech weather has local cache
+        if let cellCache = BookCellContentCache[index] {
+            cell.bookName.text = cellCache.name + "\t" + cellCache.author
+            cell.updateTime.text = cellCache.time
+            cell.latestedChapter.setTitle(cellCache.chapter, for: .normal)
+            cell.bookCover.kf.setImage(with: URL(string: cellCache.img))
+            cell.latestedChapter.isUserInteractionEnabled = true
+            cell.isUserInteractionEnabled = true
+            cell.origin.text = cellCache.host
+        }else{
+            mainPageGetter.getMainPage(path: books[index].path!, index: index)
+        }
+        //cell.showLatestedChapterDelegate = self
         return cell
     }
     
@@ -137,5 +160,10 @@ class BooksTableViewController: UITableViewController,UISearchBarDelegate,UISear
         // Pass the selected object to the new view controller.
     }
     */
-
+}
+extension BooksTableViewController: UpdateMainPageDelegate {
+    func updateMainPage(index: Int, content: BookCellContent) {
+        BookCellContentCache[index] = content
+        tableView.reloadRows(at: [IndexPath.init(row: index, section: 0)], with: .fade)
+    }
 }
